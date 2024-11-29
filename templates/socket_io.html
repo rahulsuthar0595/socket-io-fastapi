@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.io Chat in FastAPI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        form {
+            margin-bottom: 10px;
+        }
+        #log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+        }
+        .message {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+Hey Lets chat in socket io with support of FastAPI.
+
+
+<h2>Default Namespace (`/`)</h2>
+<form id="emit">
+    <input type="text" id="emit_data" placeholder="Message" required>
+    <button type="submit">Send Custom Event</button>
+</form>
+<form id="broadcast">
+    <input type="text" id="broadcast_data" placeholder="Message" required>
+    <button type="submit">Broadcast</button>
+</form>
+<form id="join">
+    <input type="text" id="join_room" placeholder="Room Name" required>
+    <button type="submit">Join Room</button>
+</form>
+<form id="leave">
+    <input type="text" id="leave_room" placeholder="Room Name" required>
+    <button type="submit">Leave Room</button>
+</form>
+<form id="send_room">
+    <input type="text" id="room_name" placeholder="Room Name" required>
+    <input type="text" id="room_data" placeholder="Message" required>
+    <button type="submit">Send to Room</button>
+</form>
+<form id="close">
+    <input type="text" id="close_room" placeholder="Room Name" required>
+    <button type="submit">Close Room</button>
+</form>
+<form id="list_rooms">
+    <button type="submit">List Rooms</button>
+</form>
+
+<h2>Admin Namespace (`/admin`)</h2>
+<form id="admin_broadcast">
+    <input type="text" id="admin_broadcast_data" placeholder="Message" required>
+    <button type="submit">Admin Broadcast</button>
+</form>
+
+<h2>Logs</h2>
+<div id="log"></div>
+
+
+<script type="text/javascript" src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="{{ url_for('static', path='js/socket_io.js') }}"></script>
+</body>
+</html>
