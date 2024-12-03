@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import socketio
@@ -7,8 +7,9 @@ from fastapi import FastAPI
 
 from config.config import settings
 from logger.logger import logger
-from src.api.v1.repository.mongo_core_repository import display_user_chats, insert_user_chat, fetch_user_data, \
-    get_chat_history, save_user_chats
+from src.api.v1.repository.mongo_core_repository import fetch_user_data, \
+    get_chat_history, save_user_chats, get_direct_chat_for_user, create_user_chat_group, add_message_to_group_chat, \
+    get_group_by_id, add_user_to_group, remove_user_to_group, get_direct_messages_list, fetch_group_data
 
 
 # NOTE: When using Namespace, the handler name must contain prefix 'on' keyword.
@@ -198,45 +199,27 @@ class SocketIOManager:
 class SocketIOChatNamespace(socketio.AsyncNamespace):
     @staticmethod
     def on_connect(sid, environ):
-        logger.info(f"on_connect chat => {sid}")
+        logger.info(f"on_connect => {sid}")
 
     @staticmethod
     async def on_disconnect(sid):
-        logger.info(f"on_disconnect chat => {sid}")
+        logger.info(f"on_disconnect => {sid}")
 
     async def on_user_joined(self, sid: str, data: Any):
-        logger.info(f"user_joined chat => {sid} - {data}")
-        response = await fetch_user_data()
-        await self.emit("return_fetched_users", response, to=sid)
+        logger.info(f"user_joined => {sid} - {data}")
+        user_response = await fetch_user_data()
+        group_response = await fetch_group_data()
+        await self.emit("return_joined_data_list", {"users": user_response, "groups": group_response}, to=sid)
 
     async def on_broadcast(self, sid: str, data: Any):
-        logger.info(f"broadcast_message chat => {sid} - {data}")
+        logger.info(f"broadcast_message => {sid} - {data}")
         await self.emit(
             "return_response", {"data": data["data"]},
             skip_sid=sid  # Not broadcast message to sender.
         )
 
-    async def on_joined_list_messages(self, sid: str, data: Any):
-        response = await display_user_chats()
-        response = json.loads(json.dumps(response, default=str))
-        await self.emit("chat_history", {"data": response}, to=sid)
-
-    async def on_broadcast_message(self, sid: str, data: Any):
-        user = data.get("user")
-        message = data.get("message")
-        if not user or not message:
-            return
-        response = await insert_user_chat({
-            "user": user,
-            "message": message,
-        })
-        response = json.loads(json.dumps(response, default=str))
-        await self.emit(
-            "new_chat",
-            {"user_name": user, "message": message, "created_date": response.get("created_date")},
-        )
-
     async def on_create_room(self, sid: str, data: Any):
+        logger.info(f"on_create_room => {sid} - {data}")
         target_uuid = data["target_uuid"].upper()
         logged_in_uuid_code = data["logged_in_uuid_code"].upper()
         sorted_room_id = "".join(sorted([logged_in_uuid_code, target_uuid]))
@@ -244,11 +227,13 @@ class SocketIOChatNamespace(socketio.AsyncNamespace):
         await self.emit("room_created_success", {"room": sorted_room_id}, to=sid)
 
     async def on_fetch_history(self, sid: str, data: Any):
+        logger.info(f"on_fetch_history => {sid} - {data}")
         room = data["room"]
         history = await get_chat_history(room)
         await self.emit("chat_history", {"history": history}, to=sid)
 
     async def on_send_message(self, sid, data):
+        logger.info(f"on_send_message => {sid} - {data}")
         room = data["room"]
         message = data["message"]
         username = data["username"]
@@ -257,3 +242,101 @@ class SocketIOChatNamespace(socketio.AsyncNamespace):
             "new_message", {"username": username, "message": message, "created_date": datetime.now().isoformat()},
             room=room
         )
+
+    async def on_direct_message_to_user(self, sid: str, data: Any):
+        logger.info(f"on_direct_message_to_user => {sid} - {data}")
+        sender_uuid = data["sender_uuid"]
+        receiver_uuid = data["receiver_uuid"]
+
+        message = data["message"]
+
+        await get_direct_chat_for_user(sender_uuid, receiver_uuid, message)
+        await self.emit(
+            event="new_message",
+            data={
+                "sender": sender_uuid,
+                "recipient": receiver_uuid,
+                "content": message,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            },
+            room=receiver_uuid
+        )
+
+    async def on_direct_messages_history(self, sid: str, data: Any):
+        logger.info(f"on_direct_messages_history => {sid} - {data}")
+        sender_uuid = data["sender_uuid"]
+        receiver_uuid = data["receiver_uuid"]
+        chat = await get_direct_messages_list(sender_uuid, receiver_uuid)
+        if chat:
+            await self.emit("direct_messages", {"messages": chat["messages"]}, to=sid)
+
+    async def on_chat_group_create(self, sid: str, data: Any):
+        logger.info(f"on_chat_group_create => {sid} - {data}")
+        group = data["group_name"]
+        created_by_user_uuid = data["user_uuid"]  # UUID of user who created group
+        group_id = await create_user_chat_group(group, created_by_user_uuid)
+        await self.emit(
+            event="group_created",
+            data={"group_name": group, "group_id": str(group_id)},
+            to=sid
+        )
+
+    async def on_group_chat_message(self, sid: str, data: Any):
+        logger.info(f"on_group_chat_message => {sid} - {data}")
+        sender_uuid = data["sender_uuid"]
+        group_id = data["group_id"]
+        message = data["message"]
+        data = {
+            "sender": sender_uuid,
+            "message": message,
+            "created_date": datetime.now(timezone.utc),
+            "status": "sent"
+        }
+        response = await add_message_to_group_chat(group_id, data)
+        if response:
+            data = json.loads(json.dumps(data, default=str))
+            await self.emit("group_message", data, room=group_id)
+
+    async def on_user_group_joined(self, sid: str, data: Any):
+        logger.info(f"on_user_group_joined => {sid} - {data}")
+        user_uuid = data["user_uuid"]
+        group_id = data["group_id"]
+        group = await add_user_to_group(group_id, user_uuid)
+        if group:
+            await self.emit(
+                event="group_updated",
+                data={
+                    "group_id": group_id, "user_uuid": user_uuid, "action": "joined"
+                },
+                room=group_id
+            )
+
+    async def on_user_group_leave(self, sid: str, data: Any):
+        logger.info(f"on_user_group_leave => {sid} - {data}")
+        user_uuid = data["user_uuid"]
+        group_id = data["group_id"]
+
+        group = await remove_user_to_group(group_id, user_uuid)
+        if group:
+            await self.emit(
+                event="group_updated",
+                data={
+                    "group_id": group_id, "user_uuid": user_uuid, "action": "left"
+                },
+                room=group_id
+            )
+
+    async def on_group_chat_history(self, sid: str, data: Any):
+        logger.info(f"on_group_chat_history => {sid} - {data}")
+        group_id = data["group_id"]
+        group = await get_group_by_id(group_id)
+        if group:
+            encoded_data = json.dumps(group.get("messages"), default=str)
+            decoded_data = json.loads(encoded_data)
+            await self.emit(
+                event="group_chat_list",
+                data={
+                    "messages": decoded_data,
+                },
+                to=sid
+            )

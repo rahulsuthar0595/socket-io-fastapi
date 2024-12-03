@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from config.config import settings
-from src.api.v1.services.socket_io import SocketIODefaultNamespace, SocketIOAdminNamespace, SocketIOChatNamespace
+from src.api.v1.services.socket_io import SocketIOChatNamespace
 from src.route.router import v1_router
 
 app = FastAPI()
@@ -22,7 +22,7 @@ sio_app = socketio.ASGIApp(sio, socketio_path="/socket.io")
 
 # sio.register_namespace(SocketIODefaultNamespace("/"))
 # sio.register_namespace(SocketIOAdminNamespace("/admin"))
-sio.register_namespace(SocketIOChatNamespace("/user-chat"))
+sio.register_namespace(SocketIOChatNamespace("/"))
 
 app.mount("/socket.io", sio_app)
 app.mount("/static", StaticFiles(directory="static"), name="static")
