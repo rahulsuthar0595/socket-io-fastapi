@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Vehicle Coordinates</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #coordinates-container {
+            text-align: center;
+            padding: 20px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+<div id="coordinates-container">
+    <h2>Live Vehicle Coordinates</h2>
+    <div id="coordinates"></div>
+</div>
+</body>
+<script src="{{ url_for('static', path='js/event_stream.js') }}"></script>
+
+</html>

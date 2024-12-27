@@ -2,6 +2,7 @@ import socketio
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.cors import CORSMiddleware
 
 from config.config import settings
 from src.api.v1.services.socket_io import SocketIODefaultNamespace, SocketIOAdminNamespace, SocketIOChatNamespace
@@ -26,5 +27,13 @@ sio.register_namespace(SocketIOChatNamespace("/user-chat"))
 
 app.mount("/socket.io", sio_app)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 templates = Jinja2Templates(directory="templates")
